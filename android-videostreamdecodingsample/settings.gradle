@@ -1,1 +1,6 @@
+include ':rtsp'
+include ':rtmp'
+include ':encoder'
+include ':rtplibrary'
+include ':encoder'
 include ':app'

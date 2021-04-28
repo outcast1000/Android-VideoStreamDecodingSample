@@ -90,6 +90,7 @@ dependencies {
         exclude module: 'library-anti-distortion'
         //exclude module: 'fly-safe-database'
     })
+    implementation project(path: ':rtsp')
     compileOnly 'com.dji:dji-sdk-provided:4.14-trial1'
 
     implementation 'androidx.appcompat:appcompat:1.0.0'
