@@ -31,6 +31,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.util.LinkedList;
+import java.util.Queue;
 
 import dji.common.airlink.PhysicalSource;
 import dji.common.camera.SettingsDefinitions;
@@ -49,10 +51,33 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
     private static final String TAG = MainActivity.class.getSimpleName();
     private static final int MSG_WHAT_SHOW_TOAST = 0;
     private static final int MSG_WHAT_UPDATE_TITLE = 1;
+    private static final int MSG_WHAT_DEBUG = 2;
     private SurfaceHolder.Callback surfaceCallback;
     private enum DemoType { USE_TEXTURE_VIEW, USE_SURFACE_VIEW, USE_SURFACE_VIEW_DEMO_DECODER}
     private static DemoType demoType = DemoType.USE_TEXTURE_VIEW;
     private VideoFeeder.VideoFeed standardVideoFeeder;
+
+
+    private Queue<String> mDebugQueue = new LinkedList<String>();
+
+    private void showDebugReal(String text){
+        mDebugQueue.add(text);
+        if (mDebugQueue.size() > 20)
+            mDebugQueue.remove();
+        String totalText = "";
+        for (String item: mDebugQueue) {
+            totalText += item + "\n";
+        }
+        mDebug.setText(totalText);
+    }
+
+    private void showDebug(String text) {
+        Log.i("ALEX:showDebug", text);
+        mainHandler.sendMessage(
+                mainHandler.obtainMessage(MSG_WHAT_DEBUG, text)
+        );
+    }
+    private TextView mDebug;
 
 
     protected VideoFeeder.VideoDataListener mReceivedVideoDataListener = null;
@@ -68,6 +93,9 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                     if (titleTv != null) {
                         titleTv.setText((String) msg.obj);
                     }
+                    break;
+                case MSG_WHAT_DEBUG:
+                    showDebugReal((String) msg.obj);
                     break;
                 default:
                     break;
@@ -89,11 +117,14 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
     @Override
     protected void onResume() {
         super.onResume();
+        showDebug("OnResume");
         initSurfaceOrTextureView();
         notifyStatusChange();
     }
 
     private void initSurfaceOrTextureView(){
+        showDebug("initSurfaceOrTextureView: " + demoType.name());
+
         switch (demoType) {
             case USE_SURFACE_VIEW:
                 initPreviewerSurfaceView();
@@ -141,31 +172,10 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        showDebug("onCreate");
 
         setContentView(R.layout.activity_main);
         initUi();
-        if (isM300Product()) {
-            OcuSyncLink ocuSyncLink = VideoDecodingApplication.getProductInstance().getAirLink().getOcuSyncLink();
-            // If your MutltipleLensCamera is set at right or top, you need to change the PhysicalSource to RIGHT_CAM or TOP_CAM.
-            ocuSyncLink.assignSourceToPrimaryChannel(PhysicalSource.LEFT_CAM, PhysicalSource.FPV_CAM, new CommonCallbacks.CompletionCallback() {
-                @Override
-                public void onResult(DJIError error) {
-                    if (error == null) {
-                        showToast("assignSourceToPrimaryChannel success.");
-                    } else {
-                        showToast("assignSourceToPrimaryChannel fail, reason: "+ error.getDescription());
-                    }
-                }
-            });
-        }
-    }
-
-    public static boolean isM300Product() {
-        if (DJISDKManager.getInstance().getProduct() == null) {
-            return false;
-        }
-        Model model = DJISDKManager.getInstance().getProduct().getModel();
-        return model == Model.MATRICE_300_RTK;
     }
 
     private void showToast(String s) {
@@ -181,6 +191,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
     }
 
     private void initUi() {
+        mDebug = (TextView) findViewById(R.id.debug);
         savePath = (TextView) findViewById(R.id.activity_main_save_path);
         screenShot = (Button) findViewById(R.id.activity_main_screen_shot);
         screenShot.setSelected(false);
@@ -194,6 +205,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             public void onClick(View v) {
                 float rate = VideoFeeder.getInstance().getTranscodingDataRate();
                 showToast("current rate:" + rate + "Mbps");
+                showDebug("current rate:" + rate + "Mbps");
                 if (rate < 10) {
                     VideoFeeder.getInstance().setTranscodingDataRate(10.0f);
                     showToast("set rate to 10Mbps");
@@ -228,6 +240,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
     }
     private long lastupdate;
     private void notifyStatusChange() {
+        showDebug("notifyStatusChange");
 
         final BaseProduct product = VideoDecodingApplication.getProductInstance();
 
@@ -245,6 +258,8 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             public void onReceive(byte[] videoBuffer, int size) {
                 if (System.currentTimeMillis() - lastupdate > 1000) {
                     Log.d(TAG, "camera recv video data size: " + size);
+                    showDebug("VF.VDL.onRcv: video data size: " + size + " (" + demoType.name() + ")");
+
                     lastupdate = System.currentTimeMillis();
                 }
                 switch (demoType) {
