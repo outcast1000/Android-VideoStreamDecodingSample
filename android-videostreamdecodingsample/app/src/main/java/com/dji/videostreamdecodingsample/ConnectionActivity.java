@@ -58,6 +58,11 @@ public class ConnectionActivity extends Activity implements View.OnClickListener
             Manifest.permission.BLUETOOTH_ADMIN,
             Manifest.permission.READ_EXTERNAL_STORAGE,
             Manifest.permission.READ_PHONE_STATE,
+            // ALEX
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.CAMERA,
+            "android.permission.FLASHLIGHT",
+            Manifest.permission.FOREGROUND_SERVICE
     };
     private static final int REQUEST_PERMISSION_CODE = 12345;
     private TextView mTextConnectionStatus;
@@ -100,6 +105,7 @@ public class ConnectionActivity extends Activity implements View.OnClickListener
     }
 
     private void startSDKRegistration() {
+        Log.i("ALEX", "ConnectionActivity::startSDKRegistration");
         if (isRegistrationInProgress.compareAndSet(false, true)) {
             AsyncTask.execute(new Runnable() {
                 @Override
@@ -111,12 +117,15 @@ public class ConnectionActivity extends Activity implements View.OnClickListener
                                 DJILog.e("App registration", DJISDKError.REGISTRATION_SUCCESS.getDescription());
                                 DJISDKManager.getInstance().startConnectionToProduct();
                                 showToast("Register SDK Success");
+                                /* ALEX. DISABLE THIS
                                 runOnUiThread(new Runnable() {
                                     @Override
                                     public void run() {
                                         loginDJIUserAccount();
                                     }
                                 });
+
+                                 */
                             } else {
                                 showToast("Register sdk fails, check network is available");
                             }
@@ -235,7 +244,9 @@ public class ConnectionActivity extends Activity implements View.OnClickListener
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        Log.i("ALEX", "ConnectionActivity::onCreate");
         super.onCreate(savedInstanceState);
+
         checkAndRequestPermissions();
         setContentView(R.layout.activity_connection);
         initUI();
@@ -243,14 +254,14 @@ public class ConnectionActivity extends Activity implements View.OnClickListener
 
     @Override
     public void onResume() {
-        Log.e(TAG, "onResume");
+        Log.i("ALEX", "ConnectionActivity::onResume");
         super.onResume();
         updateTitleBar();
     }
 
     @Override
     protected void onDestroy() {
-        Log.e(TAG, "onDestroy");
+        Log.i("ALEX", "ConnectionActivity::onDestroy");
         if (KeyManager.getInstance() != null) {
             KeyManager.getInstance().removeListener(firmVersionListener);
         }
@@ -326,6 +337,7 @@ public class ConnectionActivity extends Activity implements View.OnClickListener
         switch (v.getId()) {
 
             case R.id.btn_open: {
+                Log.i("ALEX", "ConnectionActivity::onClick Starting MainActivity");
                 Intent intent = new Intent(this, MainActivity.class);
                 startActivity(intent);
                 break;

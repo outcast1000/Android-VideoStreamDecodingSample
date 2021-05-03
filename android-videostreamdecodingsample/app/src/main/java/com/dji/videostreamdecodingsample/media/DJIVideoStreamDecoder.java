@@ -48,7 +48,7 @@ import dji.sdk.base.BaseProduct;
  * 6. Release the ffmpeg and the MediaCodec, stop the decoding thread.
  */
 public class DJIVideoStreamDecoder implements NativeHelper.NativeDataListener {
-    private static final String TAG = DJIVideoStreamDecoder.class.getSimpleName();
+    private static final String TAG = "ALEX:DJIVideoStreamDecoder";//DJIVideoStreamDecoder.class.getSimpleName();
     private static final int BUF_QUEUE_SIZE = 30;
     private static final int MSG_INIT_CODEC = 0;
     private static final int MSG_FRAME_QUEUE_IN = 1;
@@ -163,6 +163,7 @@ public class DJIVideoStreamDecoder implements NativeHelper.NativeDataListener {
         handlerNew = new Handler(handlerThreadNew.getLooper(), new Handler.Callback() {
             @Override
             public boolean handleMessage(Message msg) {
+                Log.i("ALEX", "DJIVideoStreamDecoder::handleMessage Sending data to NativeHelper");
                 byte[] buf = (byte[])msg.obj;
                 NativeHelper.getInstance().parse(buf, msg.arg1);
                 return false;
@@ -186,10 +187,13 @@ public class DJIVideoStreamDecoder implements NativeHelper.NativeDataListener {
      * should set "null" surface when calling the "configure" method of MediaCodec.
      */
     public void init(Context context, Surface surface) {
+        Log.i("ALEX", "DJIVideoStreamDecoder::init");
+
         this.context = context;
         this.surface = surface;
         NativeHelper.getInstance().setDataListener(this);
         if (dataHandler != null && !dataHandler.hasMessages(MSG_INIT_CODEC)) {
+            Log.i("ALEX", "DJIVideoStreamDecoder::init Send Message: MSG_INIT_CODEC");
             dataHandler.sendEmptyMessage(MSG_INIT_CODEC);
         }
     }
@@ -213,6 +217,8 @@ public class DJIVideoStreamDecoder implements NativeHelper.NativeDataListener {
      * @return Resource ID of the IDR frame
      */
     public int getIframeRawId(Model pModel, int width) {
+        Log.i("ALEX", "DJIVideoStreamDecoder::getIframeRawId");
+
         int iframeId = R.raw.iframe_1280x720_ins;
 
         switch(pModel) {
@@ -487,6 +493,8 @@ public class DJIVideoStreamDecoder implements NativeHelper.NativeDataListener {
      * @throws IOException
      */
     private byte[] getDefaultKeyFrame(int width) throws IOException {
+        Log.i("ALEX", "DJIVideoStreamDecoder::getDefaultKeyFrame");
+
         BaseProduct product = DJISDKManager.getInstance().getProduct();
         if (product == null || product.getModel() == null) {
             return null;
@@ -511,6 +519,8 @@ public class DJIVideoStreamDecoder implements NativeHelper.NativeDataListener {
      * Initialize the hardware decoder.
      */
     private void initCodec() {
+        Log.i("ALEX", "DJIVideoStreamDecoder::initCodec");
+
         if (width == 0 || height == 0) {
             return;
         }
@@ -554,7 +564,9 @@ public class DJIVideoStreamDecoder implements NativeHelper.NativeDataListener {
     }
 
     private void startDataHandler() {
+        Log.i("ALEX", "DJIVideoStreamDecoder::startDataHandler");
         if (dataHandlerThread != null && dataHandlerThread.isAlive()) {
+            Log.w("ALEX", "DJIVideoStreamDecoder::startDataHandler Already up. DO NOT PROCEED");
             return;
         }
         dataHandlerThread = new HandlerThread("frame data handler thread");
@@ -564,6 +576,7 @@ public class DJIVideoStreamDecoder implements NativeHelper.NativeDataListener {
             public void handleMessage(Message msg) {
                 switch (msg.what) {
                     case MSG_INIT_CODEC:
+                        Log.i("ALEX", "DJIVideoStreamDecoder::handleMessage (dataHandler) MSG_INIT_CODEC");
                         try {
                             initCodec();
                         } catch (Exception e) {
@@ -575,6 +588,7 @@ public class DJIVideoStreamDecoder implements NativeHelper.NativeDataListener {
                         sendEmptyMessageDelayed(MSG_DECODE_FRAME, 1);
                         break;
                     case MSG_FRAME_QUEUE_IN:
+                        Log.i("ALEX", "DJIVideoStreamDecoder::handleMessage (dataHandler) MSG_FRAME_QUEUE_IN");
                         try {
                             onFrameQueueIn(msg);
                         } catch (Exception e) {
@@ -587,6 +601,7 @@ public class DJIVideoStreamDecoder implements NativeHelper.NativeDataListener {
                         }
                         break;
                     case MSG_DECODE_FRAME:
+                        Log.i("ALEX", "DJIVideoStreamDecoder::handleMessage (dataHandler) MSG_DECODE_FRAME");
                         try {
                             decodeFrame();
                         } catch (Exception e) {
@@ -602,6 +617,7 @@ public class DJIVideoStreamDecoder implements NativeHelper.NativeDataListener {
                         }
                         break;
                     case MSG_YUV_DATA:
+                        Log.i("ALEX", "DJIVideoStreamDecoder::handleMessage (dataHandler) MSG_YUV_DATA");
 
                         break;
                     default:
@@ -615,6 +631,8 @@ public class DJIVideoStreamDecoder implements NativeHelper.NativeDataListener {
      * Stop the data processing thread
      */
     private void stopDataHandler() {
+        Log.i("ALEX", "DJIVideoStreamDecoder::stopDataHandler");
+
         if (dataHandlerThread == null || !dataHandlerThread.isAlive()) {
             return;
         }
@@ -688,6 +706,7 @@ public class DJIVideoStreamDecoder implements NativeHelper.NativeDataListener {
             return;
         }
         if (!hasIFrameInQueue) { // check the I frame flag
+            Log.i("ALEX", "DJIVideaStreamDecoder::onFrameQueueIn (!hasIFrameInQueue)");
             if (inputFrame.frameNum !=1 && !inputFrame.isKeyFrame) {
                 loge("the timing for setting iframe has not yet come.");
                 return;
@@ -753,11 +772,15 @@ public class DJIVideoStreamDecoder implements NativeHelper.NativeDataListener {
      */
     @TargetApi(Build.VERSION_CODES.LOLLIPOP)
     private void decodeFrame() throws Exception {
+
+        Log.i("ALEX", "DJIVideoStreamDecoder::decodeFrame");
         DJIFrame inputFrame = frameQueue.poll();
         if (inputFrame == null) {
+            Log.w("ALEX", "DJIVideoStreamDecoder::decodeFrame (STOPPED) inputFrame is null");
             return;
         }
         if (codec == null) {
+            Log.w("ALEX", "DJIVideoStreamDecoder::decodeFrame (STOPPED) codec is null");
             if (dataHandler != null && !dataHandler.hasMessages(MSG_INIT_CODEC)) {
                 dataHandler.sendEmptyMessage(MSG_INIT_CODEC);
             }
@@ -765,7 +788,7 @@ public class DJIVideoStreamDecoder implements NativeHelper.NativeDataListener {
         }
 
         int inIndex = codec.dequeueInputBuffer(0);
-
+        Log.i("ALEX", "DJIVideoStreamDecoder::decodeFrame codec inIndex: " + inIndex);
         // Decode the frame using MediaCodec
         if (inIndex >= 0) {
             //Log.d(TAG, "decodeFrame: index=" + inIndex);
@@ -778,18 +801,17 @@ public class DJIVideoStreamDecoder implements NativeHelper.NativeDataListener {
 
             // Get the output data from the decoder.
             int outIndex = codec.dequeueOutputBuffer(bufferInfo, 0);
-
+            Log.i("ALEX", "DJIVideoStreamDecoder::decodeFrame codec outIndex: " + outIndex);
             if (outIndex >= 0) {
                 //Log.d(TAG, "decodeFrame: outIndex: " + outIndex);
                 if (surface == null && yuvDataListener != null) {
+                    Log.i("ALEX", "DJIVideoStreamDecoder::decodeFrame about to send data");
                     // If the surface is null, the yuv data should be get from the buffer and invoke the callback.
                     logd("decodeFrame: need callback");
                     ByteBuffer yuvDataBuf = codec.getOutputBuffer(outIndex);
                     yuvDataBuf.position(bufferInfo.offset);
                     yuvDataBuf.limit(bufferInfo.size - bufferInfo.offset);
-                    if (yuvDataListener != null) {
-                        yuvDataListener.onYuvDataReceived(codec.getOutputFormat(), yuvDataBuf, bufferInfo.size - bufferInfo.offset,  width, height);
-                    }
+                    yuvDataListener.onYuvDataReceived(codec.getOutputFormat(), yuvDataBuf, bufferInfo.size - bufferInfo.offset,  width, height);
                 }
                 // All the output buffer must be release no matter whether the yuv data is output or
                 // not, so that the codec can reuse the buffer.
@@ -814,6 +836,8 @@ public class DJIVideoStreamDecoder implements NativeHelper.NativeDataListener {
                 loge("format changed, color: " + codec.getOutputFormat().getInteger(MediaFormat.KEY_COLOR_FORMAT));
             }
         }else {
+            Log.w("ALEX", "DJIVideoStreamDecoder::decodeFrame (STOPPED?) codec flush");
+
             codec.flush();
         }
     }
@@ -848,20 +872,22 @@ public class DJIVideoStreamDecoder implements NativeHelper.NativeDataListener {
 
     @Override
     public void onDataRecv(byte[] data, int size, int frameNum, boolean isKeyFrame, int width, int height) {
+        Log.i("ALEX", String.format("DJIVideoStreamDecoder::onDataRecv size: %d frameNum: %d isKeyFrame: %d (%d x %d)",
+                size, frameNum, isKeyFrame ? 1 : 0, width, height));
         if (dataHandler == null || dataHandlerThread == null || !dataHandlerThread.isAlive()) {
+            Log.w("ALEX", String.format("DJIVideoStreamDecoder::onDataRecv (DO NOT PROCEED. IS NULL?) dataHandler: %d dataHandlerThread: %d dataHandlerThread: %d",
+                    dataHandler == null ? 1 : 0, dataHandlerThread == null ? 1 : 0, dataHandlerThread == null ? 1 : 0));
             return;
         }
         if (data.length != size) {
             loge( "recv data size: " + size + ", data lenght: " + data.length);
         } else {
-            logd( "recv data size: " + size + ", frameNum: "+frameNum+", isKeyframe: "+isKeyFrame+"," +
-                    " width: "+width+", height: " + height);
             currentTime = System.currentTimeMillis();
             frameIndex ++;
             DJIFrame newFrame = new DJIFrame(data, size, currentTime, currentTime, isKeyFrame,
                     frameNum, frameIndex, width, height);
+            Log.i("ALEX", String.format("DJIVideoStreamDecoder::onDataRecv (new Frame) time: %d frameIndex: %d", currentTime, frameIndex));
             dataHandler.obtainMessage(MSG_FRAME_QUEUE_IN, newFrame).sendToTarget();
-
         }
     }
 }

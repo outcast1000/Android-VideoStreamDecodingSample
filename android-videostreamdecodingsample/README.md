@@ -39,5 +39,26 @@ When you open the project in Android Studio, you may see that there are four jav
   It's an Activity class to implement the features of the sample project, like implementing the UI elements, init a SurfaceView to preview the live stream data, save buffer data into a JPEG image file, etc.
   
 For more details, please check the sample project's source code.
+
+
+## ALEX
+
+I made it work successfully
+There are two considerations:
+1. I have disabled the Rotate & Convert Color in VideoDecoder. Is it OK? (The color looks good though)
+2. I have force the video transmission resolution to 1632x1088 (native drone resolution?). Can i change it?
+
+Also some other TODO stuff.
+1. Decrease the size of the font and the lines of the Debug window (Is there any way to write on the screen?)
+2. No need to send the audio
+3. Auto in when "Open" is enabled? (Change the connection screen)
+
+
+Other notes
+I have disabled the DJI login.
+
+
+
+
   
   

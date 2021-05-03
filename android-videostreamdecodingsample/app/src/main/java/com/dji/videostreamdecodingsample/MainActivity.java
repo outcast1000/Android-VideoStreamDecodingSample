@@ -5,6 +5,7 @@ import android.graphics.ImageFormat;
 import android.graphics.Rect;
 import android.graphics.SurfaceTexture;
 import android.graphics.YuvImage;
+import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
 import android.os.Build;
@@ -24,6 +25,11 @@ import android.widget.Toast;
 
 import com.dji.videostreamdecodingsample.media.DJIVideoStreamDecoder;
 import com.dji.videostreamdecodingsample.media.NativeHelper;
+import com.dji.videostreamdecodingsample.rtsp.RtspDroneCamera;
+import com.pedro.encoder.Frame;
+import com.pedro.rtsp.rtsp.Protocol;
+import com.pedro.rtsp.rtsp.RtspClient;
+import com.pedro.rtsp.utils.ConnectCheckerRtsp;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -34,25 +40,68 @@ import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.Queue;
 
-import dji.common.airlink.PhysicalSource;
+import androidx.core.util.Pair;
 import dji.common.camera.SettingsDefinitions;
 import dji.common.error.DJIError;
 import dji.common.product.Model;
 import dji.common.util.CommonCallbacks;
-import dji.sdk.airlink.OcuSyncLink;
 import dji.sdk.base.BaseProduct;
 import dji.sdk.camera.Camera;
 import dji.sdk.camera.VideoFeeder;
 import dji.sdk.codec.DJICodecManager;
-import dji.sdk.sdkmanager.DJISDKManager;
 import dji.thirdparty.afinal.core.AsyncTask;
 
-public class MainActivity extends Activity implements DJICodecManager.YuvDataCallback {
+public class MainActivity extends Activity implements DJICodecManager.YuvDataCallback, ConnectCheckerRtsp {
     private static final String TAG = MainActivity.class.getSimpleName();
     private static final int MSG_WHAT_SHOW_TOAST = 0;
     private static final int MSG_WHAT_UPDATE_TITLE = 1;
     private static final int MSG_WHAT_DEBUG = 2;
     private SurfaceHolder.Callback surfaceCallback;
+    private static final String RTSP_ENDPOINT = "rtsp://192.168.0.13:8554/dji";
+// ALEX
+    @Override
+    public void onConnectionSuccessRtsp() {
+        showDebug("onConnectionSuccessRtsp");
+    }
+
+    @Override
+    public void onConnectionFailedRtsp(String reason) {
+        showDebug("onConnectionFailedRtsp: " + reason);
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (rtspDroneCamera.reTry(5000, reason)) {
+                    showDebug("Retry: " + reason);
+                } else {
+                    showDebug("Connection failed: " + reason);
+                    rtspDroneCamera.stopStream();
+                    buttonStreamStartStop.setText("Start Stream");
+                }
+            }
+        });
+    }
+
+    @Override
+    public void onNewBitrateRtsp(long bitrate) {
+        showDebug("onNewBitrateRtsp: " + bitrate);
+    }
+
+    @Override
+    public void onDisconnectRtsp() {
+        showDebug("onDisconnectRtsp");
+    }
+
+    @Override
+    public void onAuthErrorRtsp() {
+        showDebug("onAuthErrorRtsp");
+        rtspDroneCamera.stopStream();
+    }
+
+    @Override
+    public void onAuthSuccessRtsp() {
+        showDebug("onAuthSuccessRtsp");
+    }
+// END ALEX
     private enum DemoType { USE_TEXTURE_VIEW, USE_SURFACE_VIEW, USE_SURFACE_VIEW_DEMO_DECODER}
     private static DemoType demoType = DemoType.USE_TEXTURE_VIEW;
     private VideoFeeder.VideoFeed standardVideoFeeder;
@@ -113,7 +162,10 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
     private int videoViewWidth;
     private int videoViewHeight;
     private int count;
-
+    // ALEX
+    private RtspDroneCamera rtspDroneCamera;
+    private Button buttonStreamStartStop;
+    // END ALEX
     @Override
     protected void onResume() {
         super.onResume();
@@ -215,6 +267,13 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                 }
             }
         });
+        // ALEX
+        buttonStreamStartStop = (Button) findViewById(R.id.activity_main_screen_start_stop_stream);
+
+        rtspDroneCamera = new RtspDroneCamera(videostreamPreviewSf, this);
+        rtspDroneCamera.setReTries(10);
+        //surfaceView.getHolder().addCallback(this);
+        // END ALEX
         updateUIVisibility();
     }
 
@@ -244,7 +303,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
         final BaseProduct product = VideoDecodingApplication.getProductInstance();
 
-        Log.d(TAG, "notifyStatusChange: " + (product == null ? "Disconnect" : (product.getModel() == null ? "null model" : product.getModel().name())));
+        Log.i(TAG, "notifyStatusChange: " + (product == null ? "Disconnect" : (product.getModel() == null ? "null model" : product.getModel().name())));
         if (product != null && product.isConnected() && product.getModel() != null) {
             updateTitle(product.getModel().name() + " Connected " + demoType.name());
         } else {
@@ -273,7 +332,17 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                          we use standardVideoFeeder to pass the transcoded video data to DJIVideoStreamDecoder, and then display it
                          * on surfaceView
                          */
+
+                        /*
+                        //=== ALEX
+                        showDebug("VideoDataListener::onReceive size: " + size);
+                        rtspDroneCamera.inputYUVData(new Frame(videoBuffer, 0, false, ImageFormat.YV12));//format.getInteger(MediaFormat.KEY_COLOR_FORMAT)));
+                        //=== END ALEX
+                        */
+
+                        Log.i("ALEX", "VideoDataListener::onReceive size: "+ size);
                         DJIVideoStreamDecoder.getInstance().parse(videoBuffer, size);
+
                         break;
 
                     case USE_TEXTURE_VIEW:
@@ -304,10 +373,13 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                 //When calibration is needed or the fetch key frame is required by SDK, should use the provideTranscodedVideoFeed
                 //to receive the transcoded video feed from main camera.
                 if (demoType == DemoType.USE_SURFACE_VIEW_DEMO_DECODER && isTranscodedVideoFeedNeeded()) {
+                    showDebug("Getting TranscodedVideoFeed");
+                    Log.i("ALEX", "MainActivity::notifyStatusChange Getting TranscodedVideoFeed");
                     standardVideoFeeder = VideoFeeder.getInstance().provideTranscodedVideoFeed();
                     standardVideoFeeder.addVideoDataListener(mReceivedVideoDataListener);
                     return;
                 }
+                Log.i("ALEX", "MainActivity::notifyStatusChange NOT Getting TranscodedVideoFeed");
                 if (VideoFeeder.getInstance().getPrimaryVideoFeed() != null) {
                     VideoFeeder.getInstance().getPrimaryVideoFeed().addVideoDataListener(mReceivedVideoDataListener);
                 }
@@ -388,6 +460,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
             @Override
             public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+                rtspDroneCamera.startPreview(); // ALEX
                 videoViewWidth = width;
                 videoViewHeight = height;
                 Log.d(TAG, "real onSurfaceTextureAvailable4: width " + videoViewWidth + " height " + videoViewHeight);
@@ -417,7 +490,23 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                         NativeHelper.getInstance().release();
                         break;
                 }
-
+                // ALEX
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2 && rtspDroneCamera.isRecording()) {
+                    rtspDroneCamera.stopRecord();
+                    /*
+                    bRecord.setText(R.string.start_record);
+                    Toast.makeText(this,
+                            "file " + currentDateAndTime + ".mp4 saved in " + folder.getAbsolutePath(),
+                            Toast.LENGTH_SHORT).show();
+                    currentDateAndTime = "";
+                     */
+                }
+                if (rtspDroneCamera.isStreaming()) {
+                    rtspDroneCamera.stopStream();
+                    buttonStreamStartStop.setText("Start streaming");
+                }
+                rtspDroneCamera.stopPreview();
+                // END ALEX
             }
         };
 
@@ -429,6 +518,20 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
     public void onYuvDataReceived(MediaFormat format, final ByteBuffer yuvFrame, int dataSize, final int width, final int height) {
         //In this demo, we test the YUV data by saving it into JPG files.
         //DJILog.d(TAG, "onYuvDataReceived " + dataSize);
+        Log.i("ALEX", String.format("MainActivity::onYuvDataReceived: fmt: %s, colorFormat: %d dataSize: %d, (%d x %d)",
+                format.toString(), format.getInteger(MediaFormat.KEY_COLOR_FORMAT),  dataSize, width, height));
+
+        //=== ALEX
+        if (yuvFrame != null){
+            byte[] arr = new byte[dataSize];
+            yuvFrame.get(arr);
+            Log.i("ALEX", String.format("MainActivity::onYuvDataReceived: fmt: %s, dataSize: %d, w: %d, h: %d", format.toString(), dataSize, width, height));
+            //=== It appears that the color format is MediaCodecInfo.CodecCapabilities.COLOR_Format16bitRGB565
+            rtspDroneCamera.inputYUVData(new Frame(arr, 0, false, ImageFormat.NV21));//format.getInteger(MediaFormat.KEY_COLOR_FORMAT)));
+        }
+        if (true) // No need to continue. The rest od the code just saving a screenshot
+            return;
+        //=== END ALEX
         if (count++ % 30 == 0 && yuvFrame != null) {
             final byte[] bytes = new byte[dataSize];
             yuvFrame.get(bytes);
@@ -594,8 +697,24 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
 
     public void onClick(View v) {
-
-        if (v.getId() == R.id.activity_main_screen_shot) {
+        // ALEX
+        if (v.getId() == R.id.activity_main_screen_start_stop_stream){
+            if (!rtspDroneCamera.isStreaming()) {
+                if (rtspDroneCamera.isRecording()
+                        || rtspDroneCamera.prepareAudio() && rtspDroneCamera.prepareVideo()) {
+                    buttonStreamStartStop.setText("Stop Streaming");
+                    rtspDroneCamera.startStream(RTSP_ENDPOINT);
+                } else {
+                    Toast.makeText(this, "Error preparing stream, This device cant do it",
+                            Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                buttonStreamStartStop.setText("Start Streaming");
+                rtspDroneCamera.stopStream();
+            }
+        }
+        // END ALEX
+        else if (v.getId() == R.id.activity_main_screen_shot) {
             handleYUVClick();
         } else {
             DemoType newDemoType = null;
@@ -681,4 +800,5 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
         return VideoFeeder.getInstance().isFetchKeyFrameNeeded() || VideoFeeder.getInstance()
                                                                                .isLensDistortionCalibrationNeeded();
     }
+
 }

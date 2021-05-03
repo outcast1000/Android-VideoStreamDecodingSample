@@ -65,6 +65,9 @@ public class VideoEncoder extends BaseEncoder implements GetCameraData {
   public boolean prepareVideoEncoder(int width, int height, int fps, int bitRate, int rotation,
       int iFrameInterval, FormatVideoEncoder formatVideoEncoder, int avcProfile,
       int avcProfileLevel) {
+    Log.i("ALEX", String.format("VideoEncoder::PrepareVideo: %dx%d fps:%d bitRate:%d, rotation:%d iFrameInterval:%d, formatVideoEncoder:%s, avc:%d, avcL: %d",
+            width, height, fps, bitRate, rotation, iFrameInterval, formatVideoEncoder.toString(), avcProfile, avcProfileLevel));
+
     this.width = width;
     this.height = height;
     this.fps = fps;
@@ -156,6 +159,7 @@ public class VideoEncoder extends BaseEncoder implements GetCameraData {
 
   @Override
   public void start(boolean resetTs) {
+    Log.i("ALEX:VideoEncoder", "start");
     forceKey = false;
     shouldReset = resetTs;
     spsPpsSetted = false;
@@ -170,6 +174,7 @@ public class VideoEncoder extends BaseEncoder implements GetCameraData {
 
   @Override
   protected void stopImp() {
+    Log.i("ALEX:VideoEncoder", "stopImp");
     spsPpsSetted = false;
     if (inputSurface != null) inputSurface.release();
     inputSurface = null;
@@ -286,6 +291,7 @@ public class VideoEncoder extends BaseEncoder implements GetCameraData {
 
   @Override
   public void inputYUVData(Frame frame) {
+    Log.i("ALEX", "VideoEncoder::inputYUVData");
     if (running && !queue.offer(frame)) {
       Log.i(TAG, "frame discarded");
     }
@@ -439,11 +445,14 @@ public class VideoEncoder extends BaseEncoder implements GetCameraData {
 
     int orientation = frame.isFlip() ? frame.getOrientation() + 180 : frame.getOrientation();
     if (orientation >= 360) orientation -= 360;
-    buffer = isYV12 ? YUVUtil.rotateYV12(buffer, width, height, orientation)
-        : YUVUtil.rotateNV21(buffer, width, height, orientation);
-
-    buffer = isYV12 ? YUVUtil.YV12toYUV420byColor(buffer, width, height, formatVideoEncoder)
-        : YUVUtil.NV21toYUV420byColor(buffer, width, height, formatVideoEncoder);
+    Log.i("ALEX", String.format("VideoEncoder::getInputFrame (%d x %d) orientation: %d isYV12:%d",width, height, orientation, isYV12 ? 1 : 0));
+    Log.w("ALEX", "TEMP COMMENT OUT rotate & convert");
+    //=== ALEX TEMP COMMENT.
+    //buffer = isYV12 ? YUVUtil.rotateYV12(buffer, width, height, orientation)
+    //    : YUVUtil.rotateNV21(buffer, width, height, orientation);
+    //buffer = isYV12 ? YUVUtil.YV12toYUV420byColor(buffer, width, height, formatVideoEncoder)
+    //    : YUVUtil.NV21toYUV420byColor(buffer, width, height, formatVideoEncoder);
+    //=== END ALEX
     frame.setBuffer(buffer);
     return frame;
   }
@@ -459,15 +468,18 @@ public class VideoEncoder extends BaseEncoder implements GetCameraData {
   protected void checkBuffer(@NonNull ByteBuffer byteBuffer,
       @NonNull MediaCodec.BufferInfo bufferInfo) {
     if (forceKey && Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+      Log.i("ALEX", "VideoEncoder::checkBuffer requestKeyframe");
       forceKey = false;
       requestKeyframe();
     }
     fixTimeStamp(bufferInfo);
     if ((bufferInfo.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
       if (!spsPpsSetted) {
+        Log.i("ALEX", "VideoEncoder::checkBuffer !spsPpsSetted");
         Pair<ByteBuffer, ByteBuffer> buffers =
             decodeSpsPpsFromBuffer(byteBuffer.duplicate(), bufferInfo.size);
         if (buffers != null) {
+          Log.i("ALEX", "VideoEncoder::checkBuffer spsPpsSetted = true");
           getVideoData.onSpsPps(buffers.first, buffers.second);
           spsPpsSetted = true;
         }

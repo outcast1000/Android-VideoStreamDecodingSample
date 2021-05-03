@@ -91,6 +91,8 @@ dependencies {
         //exclude module: 'fly-safe-database'
     })
     implementation project(path: ':rtsp')
+    implementation project(path: ':encoder')
+    implementation project(path: ':rtplibrary')
     compileOnly 'com.dji:dji-sdk-provided:4.14-trial1'
 
     implementation 'androidx.appcompat:appcompat:1.0.0'
